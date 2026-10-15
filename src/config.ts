@@ -14,7 +14,7 @@ export const config = {
   // PAPER farming (STRATEGY=farm): hold a hedge, close both legs together after this move
   farmMoveBps: num('FARM_MOVE_BPS', 60),            // at 100x the bust is ~95 bps away
   farmBustGuard: num('FARM_BUST_GUARD', 0.85),      // close both if a leg is this fraction of the way to its bust
-  farmBudgetUsd: num('FARM_BUDGET_USD', 25),        // stop starting cycles once this much has been spent on PAPER
+  farmBudgetUsd: num('FARM_BUDGET_USD', 25),        // stop starting cycles once this much has been spent on PAPER; 0 = no cap (farm until the balance can't fund a pair)
 
   // Sizing
   marginPerLegUsd: num('MARGIN_PER_LEG_USD', 10),   // contract minimum is $10

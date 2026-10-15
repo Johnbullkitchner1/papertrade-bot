@@ -16,10 +16,12 @@ if (mode !== 'sim' && mode !== 'live') throw new Error(`unknown mode ${mode}`);
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 async function main() {
-  log.info(`papertrade-bot starting in ${mode.toUpperCase()} mode`);
   const strategy = process.argv.find((a) => a.startsWith('--strategy='))?.slice(11) ?? config.strategy;
   if (strategy !== 'trade' && strategy !== 'farm') throw new Error(`unknown strategy ${strategy}`);
-  if (strategy === 'farm') log.info(`strategy FARM: legs $${config.marginPerLegUsd} x${config.leverage}, close both at ${config.farmMoveBps} bps, budget $${config.farmBudgetUsd}, max ${config.maxConcurrentPairs} cycles`);
+  const tag = process.env.RUN_TAG ? `-${process.env.RUN_TAG}` : '';
+  log.toFile(`${root}logs/run-${strategy === 'farm' ? 'farm-' : ''}${mode}${tag}.log`);
+  log.info(`papertrade-bot starting in ${mode.toUpperCase()} mode`);
+  if (strategy === 'farm') log.info(`strategy FARM: legs $${config.marginPerLegUsd} x${config.leverage}, close both at ${config.farmMoveBps} bps, budget ${config.farmBudgetUsd > 0 ? '$' + config.farmBudgetUsd : 'none (farm until the balance cannot fund a pair)'}, max ${config.maxConcurrentPairs} cycles`);
   else log.info(`strategy TRADE: legs $${config.marginPerLegUsd} x${config.leverage}, loser stop -${config.loserStopPct * 100}%, take-profit +${config.takeProfitPct * 100}% of pair, max ${config.maxConcurrentPairs} pairs, session loss limit $${config.maxSessionLossUsd}`);
 
   await refreshMarkets();
@@ -49,7 +51,6 @@ async function main() {
   log.info('warming up price history (20s)…');
   await new Promise((r) => setTimeout(r, 20_000));
 
-  const tag = process.env.RUN_TAG ? `-${process.env.RUN_TAG}` : '';
   const journal = new Journal(`${root}logs/journal-${strategy === 'farm' ? 'farm-' : ''}${mode}${tag}.jsonl`);
   const trader = strategy === 'farm' ? new PaperFarmer(config, feed, ex, journal) : new PairTrader(config, feed, ex, journal);
   trader.start();

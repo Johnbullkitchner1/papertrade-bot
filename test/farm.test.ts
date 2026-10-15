@@ -61,3 +61,25 @@ test('farm: a leg liquidated before the target still farms, and the survivor is 
   assert.ok(stats.paperMinted > 200, `minted ${stats.paperMinted}`); // full $10 margin minted
   assert.deepEqual(ex.openPositionIds(), []);
 });
+
+test('farm: when one asset will not open (OI cap), the other asset keeps farming', async () => {
+  const feed = new FakeFeed();
+  const cfg = { ...config, leverage: 100, farmMoveBps: 60, farmBudgetUsd: 0, maxConcurrentPairs: 1, pairCooldownMs: 50, closeRetryMs: 100, secondLegGraceMs: 200 };
+  class BtcCapped extends SimExecutor {
+    override open(asset: Asset, isLong: boolean, margin: number, leverage: number, signal?: AbortSignal) {
+      return asset === 'BTC' ? Promise.reject(new Error('OI cap')) : super.open(asset, isLong, margin, leverage, signal);
+    }
+  }
+  const ex = new BtcCapped(feed as unknown as PriceFeed, 49, [0, 0], false);
+  await ex.init();
+  for (let i = 0; i < 30; i++) { feed.push('BTC', 100_000 + (i % 2) * 20); feed.push('ETH', 3000 + (i % 2) * 0.1); } // BTC looks busier
+  const farmer = new PaperFarmer(cfg, feed as unknown as PriceFeed, ex, new Journal(`${mkdtempSync(`${tmpdir()}/ptf-`)}/j.jsonl`));
+  farmer.start();
+  await sleep(1000);
+  const active = farmer.activeCycles();
+  assert.equal(active.length, 1);
+  assert.equal(active[0].asset, 'ETH');
+  assert.equal(active[0].state, 'holding');
+  await farmer.stop();
+  assert.deepEqual(ex.openPositionIds(), []);
+});

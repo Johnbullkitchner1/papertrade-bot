@@ -378,6 +378,13 @@ export class LiveExecutor implements Executor {
     const w = this.pendingOpens.get(intentId);
     if (w) w.reject(new Error(`open ${outcome}`));
     this.abandoned.delete(intentId);
+    // A close intent that ended without executing: fail it now so the caller retries in ~2 s
+    // instead of waiting out the 60 s confirmation timeout while the price runs toward the bust.
+    for (const [id, c] of this.pendingCloses) {
+      if (c.intentId !== intentId) continue;
+      log.warn(`close intent ${intentId.slice(0, 10)}… for ${id} ended as '${outcome}'; retrying`);
+      clearTimeout(c.timer); this.pendingCloses.delete(id); c.reject(new Error(`close ${outcome}`));
+    }
   }
 
   onSettled(cb: (r: CloseResult) => void) { this.settledCbs.push(cb); }

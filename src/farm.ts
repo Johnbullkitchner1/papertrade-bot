@@ -41,7 +41,8 @@ export class PaperFarmer {
   private cycles = new Map<number, Cycle>();
   private nextId = 1;
   private lastStart = 0;
-  private openFailures = 0;
+  private assetFailures: Record<Asset, { n: number; until: number }> = { BTC: { n: 0, until: 0 }, ETH: { n: 0, until: 0 } };
+  private lowBalanceLogged = false;
   private stopping = false;
   private timer?: NodeJS.Timeout;
   private lastLoopAt = 0;
@@ -83,7 +84,7 @@ export class PaperFarmer {
     const payback = y && Number.isFinite(costPer) && y.perPaperPerDay > 0 ? costPer / y.perPaperPerDay : NaN;
     const live = this.activeCycles().map((c) => `#${c.id} ${c.asset} ${c.state}${c.state === 'holding' ? ` ${this.moveBps(c).toFixed(0)}/${this.cfg.farmMoveBps}bps` : ''}`).join(' ');
     const lifetime = this.ex.lifetimePnl();
-    return `FARM bal $${this.ex.freeBalance().toFixed(2)} | cycles ${s.cycles} | PAPER +${s.paperMinted.toFixed(0)} for $${(-s.net).toFixed(2)}${lifetime !== undefined ? ` (lifetime $${(-lifetime).toFixed(2)} of $${this.cfg.farmBudgetUsd})` : ''} (${Number.isFinite(costPer) ? '$' + costPer.toFixed(4) : '–'}/PAPER) | yield ${y ? '$' + y.perPaperPerDay.toFixed(5) + '/PAPER/day' : '–'} | payback ${Number.isFinite(payback) ? payback.toFixed(0) + 'd' : '–'} | liqs ${s.liquidations} | ${live || 'idle'}`;
+    return `FARM bal $${this.ex.freeBalance().toFixed(2)} | cycles ${s.cycles} | PAPER +${s.paperMinted.toFixed(0)} for $${(-s.net).toFixed(2)}${lifetime !== undefined ? ` (lifetime $${(-lifetime).toFixed(2)}${this.cfg.farmBudgetUsd > 0 ? ` of $${this.cfg.farmBudgetUsd}` : ''})` : ''} (${Number.isFinite(costPer) ? '$' + costPer.toFixed(4) : '–'}/PAPER) | yield ${y ? '$' + y.perPaperPerDay.toFixed(5) + '/PAPER/day' : '–'} | payback ${Number.isFinite(payback) ? payback.toFixed(0) + 'd' : '–'} | liqs ${s.liquidations} | ${live || 'idle'}`;
   }
 
   private guard(fn: () => void) { try { fn(); } catch (e) { log.error('farm error', e); } }
@@ -136,17 +137,23 @@ export class PaperFarmer {
     if (this.stopping) return;
     const active = this.activeCycles();
     if (active.length >= this.cfg.maxConcurrentPairs) return;
-    const cooldown = this.cfg.pairCooldownMs * 2 ** Math.min(this.openFailures, 6);
+    const cooldown = this.cfg.pairCooldownMs * 2 ** Math.min(...ASSETS.map((a) => this.assetFailures[a].n), 6); // only slows down when every asset is failing
     if (Date.now() - this.lastStart < cooldown) return;
     const spent = -(this.ex.lifetimePnl() ?? this.stats.net); // live: whole account history, so restarts don't reset the cap
-    if (spent >= this.cfg.farmBudgetUsd) {
+    if (this.cfg.farmBudgetUsd > 0 && spent >= this.cfg.farmBudgetUsd) {
       log.warn(`farm budget spent ($${spent.toFixed(2)} of $${this.cfg.farmBudgetUsd}, account lifetime); no new cycles`);
       this.stopping = true;
       return;
     }
-    if (this.ex.freeBalance() < 2 * this.cfg.marginPerLegUsd + this.cfg.minFreeBalanceUsd) return;
+    if (this.ex.freeBalance() < 2 * this.cfg.marginPerLegUsd + this.cfg.minFreeBalanceUsd) {
+      if (!active.length && !this.lowBalanceLogged) log.warn(`free balance $${this.ex.freeBalance().toFixed(2)} can't fund another $${2 * this.cfg.marginPerLegUsd} pair; waiting (deposit more to keep farming)`);
+      this.lowBalanceLogged = !active.length;
+      return;
+    }
+    this.lowBalanceLogged = false;
     const busy = this.cfg.onePairPerAsset ? new Set(active.map((c) => c.asset)) : new Set<Asset>();
-    for (const a of ASSETS) if (!this.feed.healthy(undefined, a)) busy.add(a);
+    // An asset whose opens keep failing (usually its OI cap is full) sits out; the other one keeps farming.
+    for (const a of ASSETS) if (!this.feed.healthy(undefined, a) || Date.now() < this.assetFailures[a].until) busy.add(a);
     const pick = pickAsset(this.feed, this.cfg.selectorWindowMs, 0, busy); // any activity level: we just wait for the move
     if (!pick) return;
     this.lastStart = Date.now();
@@ -173,14 +180,18 @@ export class PaperFarmer {
     clearTimeout(grace);
     this.adoptUnmatched(c);
     if (!(c.long && c.short)) {
-      if (!c.closeRequested) this.openFailures++;
+      if (!c.closeRequested) {
+        const f = this.assetFailures[asset];
+        f.n++; f.until = Date.now() + Math.min(30_000 * 2 ** (f.n - 1), 30 * 60_000);
+        log.warn(`${asset} opens failing (${f.n}x in a row); trying the other asset for ${((f.until - Date.now()) / 1000).toFixed(0)}s`);
+      }
       const err = [l, s].find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason;
       log.warn(`cycle #${c.id}: leg failed to open (${err?.message ?? err}); ${c.long || c.short ? 'closing the other' : 'nothing opened'}`);
       this.stats.aborted++;
       this.beginClosing(c, 'open-failed');
       return;
     }
-    this.openFailures = 0;
+    this.assetFailures[asset] = { n: 0, until: 0 };
     if (c.closeRequested) { this.beginClosing(c, c.closeRequested); return; }
     log.info(`cycle #${c.id}: filled long @${c.long.entry} short @${c.short.entry}; holding`);
     if (this.legs(c).some((x) => c.results.has(x.id))) { this.beginClosing(c, 'liquidated'); return; }
