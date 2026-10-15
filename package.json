@@ -1,0 +1,26 @@
+{
+  "name": "papertrade-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sim": "caffeinate -dims tsx --env-file-if-exists=.env src/index.ts --mode=sim",
+    "live": "caffeinate -dims tsx --env-file-if-exists=.env src/index.ts --mode=live",
+    "farm": "STRATEGY=farm caffeinate -dims tsx --env-file-if-exists=.env src/index.ts --mode=sim",
+    "farm:live": "STRATEGY=farm caffeinate -dims tsx --env-file-if-exists=.env src/index.ts --mode=live",
+    "stats": "tsx src/report.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "viem": "^2.57.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
