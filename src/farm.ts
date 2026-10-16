@@ -143,6 +143,12 @@ export class PaperFarmer {
     if (active.length >= this.cfg.maxConcurrentPairs) return;
     const cooldown = this.cfg.pairCooldownMs * 2 ** Math.min(...ASSETS.map((a) => this.assetFailures[a].n), 6); // only slows down when every asset is failing
     if (Date.now() - this.lastStart < cooldown) return;
+    const paper = this.ex.paperSummary();
+    if (this.cfg.farmTargetPaper > 0 && paper.unstaked + paper.staked >= this.cfg.farmTargetPaper) {
+      log.info(`PAPER target reached (${(paper.unstaked + paper.staked).toFixed(0)} of ${this.cfg.farmTargetPaper}); no new cycles`);
+      this.stopping = true;
+      return;
+    }
     const spent = -(this.ex.lifetimePnl() ?? this.stats.net); // live: whole account history, so restarts don't reset the cap
     if (this.cfg.farmBudgetUsd > 0 && spent >= this.cfg.farmBudgetUsd) {
       log.warn(`farm budget spent ($${spent.toFixed(2)} of $${this.cfg.farmBudgetUsd}, account lifetime); no new cycles`);

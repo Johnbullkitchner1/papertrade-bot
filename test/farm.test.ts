@@ -104,3 +104,17 @@ test('farm: no new cycle while the relayer queue is backed up; farming resumes w
   await farmer.stop();
   assert.deepEqual(ex.openPositionIds(), []);
 });
+
+test('farm: no new cycle once the account holds the PAPER target', async () => {
+  const feed = new FakeFeed();
+  const cfg = { ...config, leverage: 100, farmMoveBps: 60, farmTargetPaper: 2000, maxConcurrentPairs: 1, pairCooldownMs: 50, closeRetryMs: 100, secondLegGraceMs: 200 };
+  class Rich extends SimExecutor { override paperSummary() { return { unstaked: 500, staked: 1500, mintedSession: 0 }; } }
+  const ex = new Rich(feed as unknown as PriceFeed, 49, [0, 0], false);
+  await ex.init();
+  for (let i = 0; i < 30; i++) { feed.push('BTC', 100_000 + (i % 2) * 2); feed.push('ETH', 3000); }
+  const farmer = new PaperFarmer(cfg, feed as unknown as PriceFeed, ex, new Journal(`${mkdtempSync(`${tmpdir()}/ptf-`)}/j.jsonl`));
+  farmer.start();
+  await sleep(500);
+  assert.equal(farmer.activeCycles().length, 0);
+  await farmer.stop();
+});
