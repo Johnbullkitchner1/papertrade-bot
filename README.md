@@ -17,7 +17,9 @@ Platform research is in `research/`.
 
 All thresholds are set in `.env` (see `.env.example`).
 
-## Farm mode (`STRATEGY=farm`)
+## Farm mode (`STRATEGY=farm`, the default)
+
+Farm mode is on by default, so `npm run sim` / `npm run live` farm. Set `STRATEGY=trade` to run the stop/take-profit strategy below instead.
 
 The one structure the platform's own design pays. Open the same long+short hedge, but hold it (there is no funding, so carrying a hedge is free) and close **both legs in a single intent** once price has moved `FARM_MOVE_BPS` (default 60 bps at 100×). The losing leg mints PAPER on its full loss; the winning leg returns ~85% of that loss, so PAPER costs roughly $0.006–0.008 each instead of the $0.042 of a naked loss. Staked PAPER then earns a share of all trader losses in USDC. The status line shows live cost per PAPER, the current payout yield per PAPER per day, and the implied payback.
 

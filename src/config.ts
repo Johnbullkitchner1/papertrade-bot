@@ -9,7 +9,7 @@ function num(name: string, def: number): number {
 }
 
 export const config = {
-  strategy: (process.env.STRATEGY ?? 'trade') as 'trade' | 'farm',
+  strategy: (process.env.STRATEGY || 'farm') as 'trade' | 'farm',
 
   // PAPER farming (STRATEGY=farm): hold a hedge, close both legs together after this move
   farmMoveBps: num('FARM_MOVE_BPS', 60),            // at 100x the bust is ~95 bps away
