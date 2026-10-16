@@ -55,7 +55,7 @@ async function main() {
   const journal = new Journal(`${root}logs/journal-${strategy === 'farm' ? 'farm-' : ''}${mode}${tag}.jsonl`);
   let pressure: QueuePressure | undefined;
   if (mode === 'live') { pressure = new QueuePressure(); pressure.start(); }
-  const trader = strategy === 'farm' ? new PaperFarmer(config, feed, ex, journal, () => pressure?.depth()) : new PairTrader(config, feed, ex, journal);
+  const trader = strategy === 'farm' ? new PaperFarmer(config, feed, ex, journal, () => pressure ? pressure.depth() ?? Infinity : undefined) : new PairTrader(config, feed, ex, journal);
   trader.start();
 
   const stake = async () => { try { await ex.stakePaper(); } catch (e) { log.warn('stake failed:', (e as Error).message); } };

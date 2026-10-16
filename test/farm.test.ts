@@ -90,10 +90,13 @@ test('farm: no new cycle while the relayer queue is backed up; farming resumes w
   const ex = new SimExecutor(feed as unknown as PriceFeed, 49, [0, 0], false);
   await ex.init();
   for (let i = 0; i < 30; i++) { feed.push('BTC', 100_000 + (i % 2) * 2); feed.push('ETH', 3000); }
-  let depth = 759;
+  let depth: number | undefined = 759;
   const farmer = new PaperFarmer(cfg, feed as unknown as PriceFeed, ex, new Journal(`${mkdtempSync(`${tmpdir()}/ptf-`)}/j.jsonl`), () => depth);
   farmer.start();
   await sleep(500);
+  assert.equal(farmer.activeCycles().length, 0);
+  depth = Infinity; // unknown (connection down) counts as busy
+  await sleep(300);
   assert.equal(farmer.activeCycles().length, 0);
   depth = 20;
   await sleep(500);

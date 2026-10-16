@@ -45,6 +45,6 @@ export class QueuePressure {
 
   stop() { this.stopped = true; this.ws?.close(); }
 
-  /** Intents currently queued at the relayer, or undefined if unknown/stale. */
+  /** Intents currently queued at the relayer, or undefined if unknown/stale (callers should treat that as busy). */
   depth(): number | undefined { return Date.now() - this.at < STALE_MS ? this.pending : undefined; }
 }
