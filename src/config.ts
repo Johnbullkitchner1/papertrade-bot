@@ -15,6 +15,7 @@ export const config = {
   farmMoveBps: num('FARM_MOVE_BPS', 60),            // at 100x the bust is ~95 bps away
   farmBustGuard: num('FARM_BUST_GUARD', 0.85),      // close both if a leg is this fraction of the way to its bust
   farmBudgetUsd: num('FARM_BUDGET_USD', 25),        // stop starting cycles once this much has been spent on PAPER; 0 = no cap (farm until the balance can't fund a pair)
+  farmMaxQueue: num('FARM_MAX_QUEUE', 100),         // live: don't start cycles while more intents than this are queued at the relayer (closes wait in line); 0 = off
 
   // Sizing
   marginPerLegUsd: num('MARGIN_PER_LEG_USD', 10),   // contract minimum is $10

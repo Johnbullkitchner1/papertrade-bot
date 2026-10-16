@@ -6,6 +6,7 @@ import { LiveExecutor } from './executor/live.ts';
 import type { Executor } from './executor/types.ts';
 import { PairTrader } from './strategy.ts';
 import { PaperFarmer } from './farm.ts';
+import { QueuePressure } from './papertrade/pressure.ts';
 import { Journal, log } from './log.ts';
 import { refreshMarkets } from './markets.ts';
 import { scoreAssets } from './selector.ts';
@@ -52,7 +53,9 @@ async function main() {
   await new Promise((r) => setTimeout(r, 20_000));
 
   const journal = new Journal(`${root}logs/journal-${strategy === 'farm' ? 'farm-' : ''}${mode}${tag}.jsonl`);
-  const trader = strategy === 'farm' ? new PaperFarmer(config, feed, ex, journal) : new PairTrader(config, feed, ex, journal);
+  let pressure: QueuePressure | undefined;
+  if (mode === 'live') { pressure = new QueuePressure(); pressure.start(); }
+  const trader = strategy === 'farm' ? new PaperFarmer(config, feed, ex, journal, () => pressure?.depth()) : new PairTrader(config, feed, ex, journal);
   trader.start();
 
   const stake = async () => { try { await ex.stakePaper(); } catch (e) { log.warn('stake failed:', (e as Error).message); } };
@@ -77,6 +80,7 @@ async function main() {
     log.info('shutting down: closing open positions…');
     clearInterval(stakeTimer); clearInterval(claimTimer); clearInterval(statusTimer);
     await trader.stop();
+    pressure?.stop();
     await ex.shutdown();
     const left = ex.openPositionIds();
     if (left.length) log.error(`positions possibly still open: ${left.join(', ')} — check papertrade.xyz`);

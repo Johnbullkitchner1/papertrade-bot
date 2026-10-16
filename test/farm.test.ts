@@ -83,3 +83,21 @@ test('farm: when one asset will not open (OI cap), the other asset keeps farming
   await farmer.stop();
   assert.deepEqual(ex.openPositionIds(), []);
 });
+
+test('farm: no new cycle while the relayer queue is backed up; farming resumes when it drains', async () => {
+  const feed = new FakeFeed();
+  const cfg = { ...config, leverage: 100, farmMoveBps: 60, farmMaxQueue: 100, maxConcurrentPairs: 1, pairCooldownMs: 50, closeRetryMs: 100, secondLegGraceMs: 200 };
+  const ex = new SimExecutor(feed as unknown as PriceFeed, 49, [0, 0], false);
+  await ex.init();
+  for (let i = 0; i < 30; i++) { feed.push('BTC', 100_000 + (i % 2) * 2); feed.push('ETH', 3000); }
+  let depth = 759;
+  const farmer = new PaperFarmer(cfg, feed as unknown as PriceFeed, ex, new Journal(`${mkdtempSync(`${tmpdir()}/ptf-`)}/j.jsonl`), () => depth);
+  farmer.start();
+  await sleep(500);
+  assert.equal(farmer.activeCycles().length, 0);
+  depth = 20;
+  await sleep(500);
+  assert.equal(farmer.activeCycles().length, 1);
+  await farmer.stop();
+  assert.deepEqual(ex.openPositionIds(), []);
+});

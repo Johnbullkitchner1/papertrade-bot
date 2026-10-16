@@ -15,7 +15,10 @@ import { deadline, randomNonce, signIntent } from '../papertrade/signing.ts';
 import { log } from '../log.ts';
 import type { CloseResult, Executor, Position } from './types.ts';
 
-const CLOSE_TIMEOUT_MS = 60_000;
+// The relayer queue is FIFO and can hold several minutes of intents. Cancelling and resubmitting
+// sends the close to the back of the line, so wait long; a close that ends failed/expired/cancelled
+// is still retried within ~2 s via its intent outcome.
+const CLOSE_TIMEOUT_MS = 15 * 60_000;
 const SESSION_MIN_REMAINING_SEC = 24 * 3600;
 const usd = (raw: bigint) => Number(raw) / 1e18;
 

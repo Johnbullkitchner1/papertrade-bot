@@ -51,7 +51,10 @@ export class PaperFarmer {
   private yield_?: PaperYield;
   readonly stats: FarmStats = { cycles: 0, net: 0, paperMinted: 0, liquidations: 0, aborted: 0 };
 
-  constructor(private cfg: Config, private feed: PriceFeed, private ex: Executor, private journal: Journal) {}
+  private queueBusyLogged = false;
+
+  constructor(private cfg: Config, private feed: PriceFeed, private ex: Executor, private journal: Journal,
+    private queueDepth: () => number | undefined = () => undefined) {}
 
   start() {
     this.feed.on('tick', (asset: Asset, tick: Tick) => {
@@ -84,7 +87,8 @@ export class PaperFarmer {
     const payback = y && Number.isFinite(costPer) && y.perPaperPerDay > 0 ? costPer / y.perPaperPerDay : NaN;
     const live = this.activeCycles().map((c) => `#${c.id} ${c.asset} ${c.state}${c.state === 'holding' ? ` ${this.moveBps(c).toFixed(0)}/${this.cfg.farmMoveBps}bps` : ''}`).join(' ');
     const lifetime = this.ex.lifetimePnl();
-    return `FARM bal $${this.ex.freeBalance().toFixed(2)} | cycles ${s.cycles} | PAPER +${s.paperMinted.toFixed(0)} for $${(-s.net).toFixed(2)}${lifetime !== undefined ? ` (lifetime $${(-lifetime).toFixed(2)}${this.cfg.farmBudgetUsd > 0 ? ` of $${this.cfg.farmBudgetUsd}` : ''})` : ''} (${Number.isFinite(costPer) ? '$' + costPer.toFixed(4) : '–'}/PAPER) | yield ${y ? '$' + y.perPaperPerDay.toFixed(5) + '/PAPER/day' : '–'} | payback ${Number.isFinite(payback) ? payback.toFixed(0) + 'd' : '–'} | liqs ${s.liquidations} | ${live || 'idle'}`;
+    const depth = this.queueDepth();
+    return `${depth !== undefined ? `queue ${depth} | ` : ''}FARM bal $${this.ex.freeBalance().toFixed(2)} | cycles ${s.cycles} | PAPER +${s.paperMinted.toFixed(0)} for $${(-s.net).toFixed(2)}${lifetime !== undefined ? ` (lifetime $${(-lifetime).toFixed(2)}${this.cfg.farmBudgetUsd > 0 ? ` of $${this.cfg.farmBudgetUsd}` : ''})` : ''} (${Number.isFinite(costPer) ? '$' + costPer.toFixed(4) : '–'}/PAPER) | yield ${y ? '$' + y.perPaperPerDay.toFixed(5) + '/PAPER/day' : '–'} | payback ${Number.isFinite(payback) ? payback.toFixed(0) + 'd' : '–'} | liqs ${s.liquidations} | ${live || 'idle'}`;
   }
 
   private guard(fn: () => void) { try { fn(); } catch (e) { log.error('farm error', e); } }
@@ -151,6 +155,15 @@ export class PaperFarmer {
       return;
     }
     this.lowBalanceLogged = false;
+    // A backed-up relayer queue means our close would wait minutes in line while the price runs toward the bust.
+    const depth = this.queueDepth();
+    if (this.cfg.farmMaxQueue > 0 && depth !== undefined && depth > this.cfg.farmMaxQueue) {
+      if (!this.queueBusyLogged) log.warn(`relayer queue has ${depth} intents (max ${this.cfg.farmMaxQueue}); waiting before starting a cycle`);
+      this.queueBusyLogged = true;
+      return;
+    }
+    if (this.queueBusyLogged) log.info(`relayer queue down to ${depth ?? '?'} intents; farming again`);
+    this.queueBusyLogged = false;
     const busy = this.cfg.onePairPerAsset ? new Set(active.map((c) => c.asset)) : new Set<Asset>();
     // An asset whose opens keep failing (usually its OI cap is full) sits out; the other one keeps farming.
     for (const a of ASSETS) if (!this.feed.healthy(undefined, a) || Date.now() < this.assetFailures[a].until) busy.add(a);

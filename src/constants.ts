@@ -12,6 +12,7 @@ export const ADDR = {
 
 export const URLS = {
   exchange: 'https://exchange.papertrade.xyz',
+  stream: 'wss://stream.papertrade.xyz/connection/websocket',
   hlWs: 'wss://api.hyperliquid.xyz/ws',
   rpc: 'https://rpc.hyperliquid.xyz/evm',
 } as const;
