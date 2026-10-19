@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Papertrade Farm Stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one centred column; headline tiles, then explanation, then charts and tables as panels. */
+:root {
+  --bg: #f4f6f5; --panel: #ffffff; --fg: #17201d; --muted: #5d6b66; --line: #dde4e1; --grid: #e8eeeb;
+  --accent: #0f7a64; --eth: #4f5bd5; --btc: #d58a1f; --bad: #c0392b; --good: #1e8a4c; --warn: #b26b00;
+  --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1413; --panel: #161d1b; --fg: #e6ede9; --muted: #93a29c; --line: #26302d; --grid: #1f2826;
+    --accent: #3cc7a3; --eth: #8b94ff; --btc: #f0a944; --bad: #ff6b5c; --good: #4fd18b; --warn: #f0a944;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1413; --panel: #161d1b; --fg: #e6ede9; --muted: #93a29c; --line: #26302d; --grid: #1f2826;
+  --accent: #3cc7a3; --eth: #8b94ff; --btc: #f0a944; --bad: #ff6b5c; --good: #4fd18b; --warn: #f0a944;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 32px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+h2 { font-size: 16px; font-weight: 600; margin: 0; }
+h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+.head { display: flex; flex-direction: column; gap: 6px; }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.live { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.dot.down { background: var(--bad); }
+.take { color: var(--muted); margin: 0; max-width: 72ch; }
+.take b { color: var(--fg); font-weight: 600; font-family: var(--font-num); font-size: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 12px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.t-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.t-val { font-family: var(--font-num); font-size: 26px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.t-sub { font-size: 13px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.meter { height: 6px; border-radius: 3px; background: var(--grid); margin-top: 10px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .6s ease; }
+.note { font-size: 13px; color: var(--muted); margin: 4px 0 14px; max-width: 72ch; }
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 16px; }
+.explain p { margin: 0; font-size: 14px; color: var(--muted); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 12px; }
+.chart { position: relative; min-height: 240px; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--font-num); font-size: 11px; fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / .12); padding: 6px 10px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; z-index: 2; }
+.tip .h { color: var(--muted); }
+.tablebox { overflow: auto; max-height: 30rem; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: var(--panel); text-align: right; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: var(--font-num); font-size: 12.5px; }
+th.l, td.l { text-align: left; }
+td.l { font-family: var(--font-body); font-size: 13px; }
+.neg { color: var(--bad); } .pos { color: var(--good); } .warn { color: var(--warn); }
+.empty { color: var(--muted); font-size: 14px; padding: 16px 0; }
+.foot { font-size: 12px; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <h1>Papertrade farm stats</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Connecting to Papertrade…</span></div>
+    <p class="take" id="take">Loading the account…</p>
+  </header>
+
+  <section class="tiles">
+    <div class="panel"><div class="t-label">Spent on PAPER</div><div class="t-val" id="k-spent">—</div><div class="meter"><i id="m-budget"></i></div><div class="t-sub" id="k-spent-sub">—</div></div>
+    <div class="panel"><div class="t-label">PAPER held</div><div class="t-val" id="k-paper">—</div><div class="meter"><i id="m-paper"></i></div><div class="t-sub" id="k-paper-sub">—</div></div>
+    <div class="panel"><div class="t-label">Cost per PAPER</div><div class="t-val" id="k-cpp">—</div><div class="t-sub" id="k-cpp-sub">—</div></div>
+    <div class="panel"><div class="t-label">Account value</div><div class="t-val" id="k-eq">—</div><div class="t-sub" id="k-eq-sub">—</div></div>
+    <div class="panel"><div class="t-label">Liquidations</div><div class="t-val" id="k-liq">—</div><div class="t-sub">Times one side was force-closed</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>How profit and loss work here</h2>
+    <p class="note">Every trade is planned to lose a little. That loss is the price paid for the PAPER it earns.</p>
+    <div class="explain">
+      <div><h3>One trade, two bets</h3><p>The bot puts $10 on the price going up and $10 on it going down, on the same coin at the same moment, at 100× leverage. One side wins and the other loses, so price direction mostly cancels out.</p></div>
+      <div><h3>Where the loss comes from</h3><p>Fees make each trade end slightly negative, usually about $0.80. Papertrade pays PAPER on the losing side, about 60 PAPER per trade.</p></div>
+      <div><h3>How the loss is capped</h3><p>The bot stops opening trades once spending reaches the <span id="x-budget">budget</span> or PAPER held reaches the <span id="x-target">target</span>. A trade closes when the price moves 0.55%, or earlier if one side gets close to being force-closed.</p></div>
+      <div><h3>What comes back</h3><p>PAPER is staked and earns a share of Papertrade's fees, paid in USDC. So far that has been a few cents a day, far less than what was spent.</p></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Open right now</h2>
+    <p class="note">Trades the bot is holding at this moment. Their money comes back when they close.</p>
+    <div id="open"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Profit or loss on each trade</h2>
+    <p class="note">Each bar is one finished trade, oldest on the left. Bars below zero cost money. The few above zero were trades where one side was liquidated and the other closed in profit.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--eth)"></i>ETH</span><span><i class="sw" style="background:var(--btc)"></i>BTC</span><span><i class="sw" style="outline:1.5px solid var(--bad)"></i>One side liquidated</span></div>
+    <div class="chart" id="c-bars"></div>
+  </section>
+
+  <section class="two">
+    <div class="panel"><h2>Running total spent</h2><p class="note">Losses on finished trades, added up over time.</p><div class="chart" id="c-cost"></div></div>
+    <div class="panel"><h2>Running total PAPER earned</h2><p class="note">PAPER earned by finished trades, added up over time.</p><div class="chart" id="c-paper"></div></div>
+  </section>
+
+  <section class="panel">
+    <h2>ETH vs BTC</h2>
+    <p class="note">ETH earns PAPER faster because its price moves more and reaches the close point sooner. A normal trade costs about the same on either coin.</p>
+    <div class="tablebox"><table><thead><tr><th class="l">Coin</th><th>Trades</th><th>PAPER earned</th><th>Spent</th><th>Cost per PAPER</th><th>PAPER per hour</th><th>Liquidations</th></tr></thead><tbody id="t-coin"></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Every trade</h2>
+    <p class="note">Newest first. Profit / loss is after fees.</p>
+    <div class="tablebox"><table><thead><tr><th>#</th><th class="l">Closed</th><th class="l">Coin</th><th class="l">How it ended</th><th>Profit / loss</th><th>PAPER</th><th>Cost per PAPER</th><th>Held</th></tr></thead><tbody id="t-trades"></tbody></table></div>
+  </section>
+
+  <p class="foot" id="foot">Data comes straight from Papertrade's public account feed and trade history. The page refreshes itself; nothing runs on the bot's computer.</p>
+</div>
+
+<script>
+// Bot settings shown on the page (match .env FARM_BUDGET_USD / FARM_TARGET_PAPER).
+const WALLET = '0x5bab81bb7e099e8d5d45a20ccef5b90415f4719a';
+const BUDGET_USD = 50;
+const TARGET_PAPER = 3000;
+const API = 'https://exchange.papertrade.xyz';
+
+const $ = (id) => document.getElementById(id);
+const raw = (v) => Number(v ?? 0) / 1e18;
+const usd2 = (x) => (x < 0 ? '-$' : '$') + Math.abs(x).toFixed(2);
+const usd4 = (x) => (Number.isFinite(x) ? '$' + x.toFixed(4) : '—');
+const int = (x) => Math.round(x).toLocaleString('en-US');
+const when = (ms) => new Date(ms).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const day = (ms) => new Date(ms).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+const NS = 'http://www.w3.org/2000/svg';
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+let wallet = null;      // live account state
+let trades = [];        // finished trades (pairs of legs)
+let lastEventAt = 0;
+$('x-budget').textContent = `$${BUDGET_USD} budget`;
+$('x-target').textContent = `${int(TARGET_PAPER)} PAPER target`;
+
+// ---------- live account feed ----------
+let es = null;
+function connect() {
+  es = new EventSource(`${API}/state/user/live?wallet=${WALLET}`);
+  es.addEventListener('wallet', (ev) => {
+    lastEventAt = Date.now();
+    const f = JSON.parse(ev.data);
+    if (Object.hasOwn(f, 'baseAccountRevision')) {
+      if (!wallet || f.baseAccountRevision !== wallet.rev) { es.close(); wallet = null; setTimeout(connect, 1000); return; }
+      const st = f.state ?? {};
+      wallet.rev = Number(f.accountRevision);
+      if (st.funds?.availableBalance !== undefined) wallet.available = raw(st.funds.availableBalance);
+      if (st.paper) { if (st.paper.balance !== undefined) wallet.paperFree = raw(st.paper.balance); if (st.paper.staked !== undefined) wallet.paperStaked = raw(st.paper.staked); }
+      if (f.lifetime?.realizedPnlRaw !== undefined) wallet.lifetimePnl = raw(f.lifetime.realizedPnlRaw);
+      for (const id of f.removedPositionIds ?? []) wallet.positions.delete(String(id));
+      for (const t of f.addedPositions ?? []) wallet.positions.set(String(t[0]), toPos(t));
+      if ((f.closedPositions ?? []).length) loadHistory();
+    } else {
+      wallet = {
+        rev: Number(f.accountRevision), available: raw(f.funds?.availableBalance),
+        paperFree: raw(f.paper?.balance), paperStaked: raw(f.paper?.staked), lifetimePnl: raw(f.lifetime?.realizedPnlRaw),
+        positions: new Map((f.openPositions ?? []).map((t) => [String(t[0]), toPos(t)])),
+      };
+    }
+    render();
+  });
+  es.onerror = () => { setStatus(false); };
+}
+const toPos = (t) => ({ id: String(t[0]), symbol: Number(t[1]) === 1 ? 'ETH' : 'BTC', isLong: Boolean(t[2]), entry: Number(t[4]), margin: raw(t[5]), leverage: Number(t[6]), openedAt: Number(t[8]) });
+
+// ---------- trade history ----------
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/trades');
+    if (!r.ok) throw new Error(r.status);
+    const { items } = await r.json();
+    trades = pairUp(items);
+    render();
+  } catch (e) { console.warn('history', e); }
+}
+
+// Two legs on the same coin and opposite sides, opened within 10 minutes = one trade.
+// Best matches first: closed in the same moment, then same entry price, then nearest opening time.
+function pairUp(items) {
+  const legs = [...items].sort((a, b) => a.openedAtMs - b.openedAtMs);
+  const cands = [];
+  for (let i = 0; i < legs.length; i++) for (let j = i + 1; j < legs.length; j++) {
+    const a = legs[i], b = legs[j], dt = Math.abs(b.openedAtMs - a.openedAtMs);
+    if (dt > 600000) break;
+    if (a.symbol !== b.symbol || a.isLong === b.isLong) continue;
+    const score = (a.timestampMs === b.timestampMs ? 0 : a.entryPriceRaw === b.entryPriceRaw ? 1 : 2) + dt / 1e7;
+    cands.push({ a, b, score });
+  }
+  cands.sort((x, y) => x.score - y.score);
+  const mate = new Map();
+  for (const c of cands) if (!mate.has(c.a.positionId) && !mate.has(c.b.positionId)) { mate.set(c.a.positionId, c.b); mate.set(c.b.positionId, c.a); }
+  const used = new Set(), out = [];
+  for (const a of legs) {
+    if (used.has(a.positionId)) continue;
+    used.add(a.positionId);
+    const b = mate.get(a.positionId);
+    if (b) used.add(b.positionId);
+    const ls = b ? [a, b] : [a];
+    const closedAt = Math.max(...ls.map((l) => l.timestampMs));
+    const net = ls.reduce((s, l) => s + raw(l.adjustedPnlRaw), 0);
+    const paper = ls.reduce((s, l) => s + raw(l.paperMintedRaw), 0);
+    const liq = ls.some((l) => l.kind === 'Liquidated');
+    out.push({ asset: a.symbol, openedAt: a.openedAtMs, closedAt, net, paper, liq, single: !b, heldMin: (closedAt - a.openedAtMs) / 60000 });
+  }
+  out.sort((x, y) => x.closedAt - y.closedAt);
+  out.forEach((t, i) => (t.n = i + 1));
+  return out;
+}
+
+// ---------- render ----------
+function setStatus(ok) {
+  $('dot').className = 'dot ' + (ok ? 'live' : 'down');
+  $('status').textContent = ok ? `Live · last account change ${when(lastEventAt)}` : 'Connection to Papertrade lost, retrying…';
+}
+
+function render() {
+  if (wallet) {
+    const spent = -wallet.lifetimePnl;
+    const held = wallet.paperFree + wallet.paperStaked;
+    let margin = 0; for (const p of wallet.positions.values()) margin += p.margin;
+    const cost = trades.reduce((s, t) => s - t.net, 0), paper = trades.reduce((s, t) => s + t.paper, 0);
+    const cpp = paper > 0 ? cost / paper : NaN;
+    const toGo = Math.max(0, TARGET_PAPER - held);
+    $('k-spent').textContent = usd2(spent);
+    $('k-spent-sub').textContent = `${usd2(BUDGET_USD - spent)} of the $${BUDGET_USD} budget left`;
+    $('m-budget').style.width = Math.min(100, spent / BUDGET_USD * 100) + '%';
+    $('m-budget').style.background = spent / BUDGET_USD > 0.9 ? 'var(--bad)' : 'var(--accent)';
+    $('k-paper').textContent = int(held);
+    $('k-paper-sub').textContent = `${int(wallet.paperStaked)} staked · target ${int(TARGET_PAPER)}`;
+    $('m-paper').style.width = Math.min(100, held / TARGET_PAPER * 100) + '%';
+    $('k-cpp').textContent = usd4(cpp);
+    $('k-cpp-sub').textContent = `Average over ${trades.length} finished trades`;
+    $('k-eq').textContent = usd2(wallet.available + margin);
+    $('k-eq-sub').textContent = `${usd2(wallet.available)} free · ${usd2(margin)} in open trades`;
+    $('k-liq').textContent = String(trades.filter((t) => t.liq).length);
+    $('take').innerHTML = '';
+    const parts = [['The bot has spent ', usd2(spent), ` of its $${BUDGET_USD} budget and holds `, int(held), ' PAPER.']];
+    if (toGo > 0 && Number.isFinite(cpp)) parts.push([' At the average cost so far, the last ', int(toGo), ' PAPER to the target should cost about ', usd2(toGo * cpp), '.']);
+    else if (toGo === 0) parts.push([' The PAPER target is reached.']);
+    for (const p of parts) p.forEach((s, i) => { const el = document.createElement(i % 2 ? 'b' : 'span'); el.textContent = s; $('take').appendChild(el); });
+    renderOpen();
+    setStatus(true);
+  }
+  renderTrades();
+}
+
+function renderOpen() {
+  const box = $('open'); box.textContent = '';
+  const ps = [...wallet.positions.values()].sort((a, b) => a.openedAt - b.openedAt);
+  if (!ps.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No open trades. The bot is idle or between trades.'; box.appendChild(d); return; }
+  const tbl = document.createElement('table');
+  tbl.innerHTML = '<thead><tr><th class="l">Coin</th><th class="l">Side</th><th>Entry price</th><th>Margin</th><th>Leverage</th><th class="l">Opened</th></tr></thead>';
+  const tb = document.createElement('tbody');
+  for (const p of ps) row(tb, [[p.symbol, 'l'], [p.isLong ? 'Up (long)' : 'Down (short)', 'l'], [(p.entry / (p.symbol === 'ETH' ? 100 : 10)).toLocaleString('en-US', { minimumFractionDigits: 2 })], [usd2(p.margin)], [p.leverage + '×'], [when(p.openedAt), 'l']]);
+  tbl.appendChild(tb);
+  const wrap = document.createElement('div'); wrap.className = 'tablebox'; wrap.appendChild(tbl); box.appendChild(wrap);
+}
+
+function row(tb, cells) {
+  const tr = document.createElement('tr');
+  for (const [text, cls] of cells) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); }
+  tb.appendChild(tr);
+}
+
+function renderTrades() {
+  if (!trades.length) return;
+  bars($('c-bars'), trades);
+  let c = 0, p = 0;
+  const cum = trades.map((t) => ({ t: t.closedAt, n: t.n, cost: (c -= t.net), paper: (p += t.paper) }));
+  line($('c-cost'), cum, 'cost', usd2, css('--accent'));
+  line($('c-paper'), cum, 'paper', int, css('--eth'));
+
+  const tc = $('t-coin'); tc.textContent = '';
+  for (const asset of ['ETH', 'BTC']) {
+    const ts = trades.filter((t) => t.asset === asset);
+    const paper = ts.reduce((s, t) => s + t.paper, 0), cost = ts.reduce((s, t) => s - t.net, 0), hrs = ts.reduce((s, t) => s + t.heldMin, 0) / 60;
+    row(tc, [[asset, 'l'], [int(ts.length)], [int(paper)], [usd2(cost)], [usd4(cost / paper)], [hrs > 0 ? int(paper / hrs) : '—'], [int(ts.filter((t) => t.liq).length)]]);
+  }
+
+  const tt = $('t-trades'); tt.textContent = '';
+  for (const t of [...trades].reverse()) {
+    const how = t.liq ? 'One side liquidated' : t.single ? 'Only one side opened' : 'Closed normally';
+    const tr = document.createElement('tr');
+    const cells = [[String(t.n)], [when(t.closedAt), 'l'], [t.asset, 'l'], [how, 'l' + (t.liq ? ' warn' : '')], [usd2(t.net), t.net < 0 ? 'neg' : 'pos'], [int(t.paper)], [t.paper > 0 && t.net < 0 ? usd4(-t.net / t.paper) : '—'], [`${int(t.heldMin)} min`]];
+    for (const [text, cls] of cells) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); }
+    tt.appendChild(tr);
+  }
+}
+
+// ---------- charts (plain SVG) ----------
+function svgEl(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function niceTicks(lo, hi, n) {
+  const span = hi - lo || 1, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= step0);
+  const out = [], end = Math.ceil(hi / step - 1e-9) * step; for (let v = Math.floor(lo / step) * step; v <= end + step * 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function textWidth(svg, strings) {
+  const t = svgEl('text', {}, svg); let w = 0;
+  for (const s of strings) { t.textContent = s; w = Math.max(w, t.getComputedTextLength()); }
+  t.remove(); return w;
+}
+function tipFor(box) {
+  let tip = box.querySelector('.tip');
+  if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; box.appendChild(tip); }
+  return {
+    show(x, y, head, lines) {
+      tip.textContent = '';
+      const h = document.createElement('div'); h.className = 'h'; h.textContent = head; tip.appendChild(h);
+      for (const l of lines) { const d = document.createElement('div'); d.textContent = l; tip.appendChild(d); }
+      tip.hidden = false;
+      tip.style.left = Math.max(0, Math.min(box.clientWidth - tip.offsetWidth, x - tip.offsetWidth / 2)) + 'px';
+      tip.style.top = Math.max(0, y - tip.offsetHeight - 12) + 'px';
+    },
+    hide() { tip.hidden = true; },
+  };
+}
+
+function bars(box, rows) {
+  box.querySelector('svg')?.remove();
+  const W = Math.max(300, box.clientWidth), H = 240, bottom = 22;
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}` }); box.prepend(svg);
+  const vals = rows.map((r) => r.net);
+  const ticks = niceTicks(Math.min(0, ...vals), Math.max(0, ...vals), 5);
+  const lo = ticks[0], hi = ticks[ticks.length - 1];
+  const left = textWidth(svg, ticks.map(usd2)) + 10, right = W - 6;
+  const y = (v) => 8 + (hi - v) / (hi - lo) * (H - bottom - 8);
+  for (const t of ticks) {
+    svgEl('line', { x1: left, x2: right, y1: y(t), y2: y(t), stroke: t === 0 ? css('--muted') : css('--grid') }, svg);
+    svgEl('text', { x: left - 6, y: y(t) + 4, 'text-anchor': 'end' }, svg).textContent = usd2(t);
+  }
+  const bw = (right - left) / rows.length, gap = Math.min(4, bw * 0.25);
+  const every = Math.ceil(rows.length / Math.max(1, Math.floor((right - left) / 34)));
+  const tip = tipFor(box);
+  rows.forEach((r, i) => {
+    const x = left + i * bw + gap / 2, top = y(Math.max(0, r.net)), h = Math.max(1, Math.abs(y(r.net) - y(0)));
+    const rect = svgEl('rect', { x, y: top, width: Math.max(1, bw - gap), height: h, rx: 2, fill: css(r.asset === 'ETH' ? '--eth' : '--btc') }, svg);
+    if (r.liq) { rect.setAttribute('stroke', css('--bad')); rect.setAttribute('stroke-width', '1.5'); }
+    if (i % every === 0) svgEl('text', { x: x + (bw - gap) / 2, y: H - 6, 'text-anchor': 'middle' }, svg).textContent = '#' + r.n;
+    rect.addEventListener('mousemove', (ev) => {
+      const b = box.getBoundingClientRect();
+      tip.show(ev.clientX - b.left, ev.clientY - b.top, `Trade #${r.n} · ${r.asset} · ${when(r.closedAt)}`,
+        [`Profit / loss ${usd2(r.net)}`, `PAPER earned ${int(r.paper)}`, r.liq ? 'One side liquidated' : r.single ? 'Only one side opened' : 'Closed normally']);
+    });
+    rect.addEventListener('mouseleave', () => tip.hide());
+  });
+}
+
+function line(box, pts, key, fmt, color) {
+  box.querySelector('svg')?.remove();
+  const W = Math.max(280, box.clientWidth), H = 240, bottom = 22;
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}` }); box.prepend(svg);
+  const ticks = niceTicks(0, Math.max(...pts.map((p) => p[key])), 4);
+  const hi = ticks[ticks.length - 1];
+  const endLabel = fmt(pts[pts.length - 1][key]);
+  const left = textWidth(svg, ticks.map(fmt)) + 10, right = W - textWidth(svg, [endLabel]) - 14;
+  const t0 = pts[0].t, t1 = pts[pts.length - 1].t || t0 + 1;
+  const x = (t) => left + (t - t0) / (t1 - t0 || 1) * (right - left);
+  const y = (v) => 10 + (hi - v) / (hi || 1) * (H - bottom - 10);
+  for (const t of ticks) {
+    svgEl('line', { x1: left, x2: right, y1: y(t), y2: y(t), stroke: css('--grid') }, svg);
+    svgEl('text', { x: left - 6, y: y(t) + 4, 'text-anchor': 'end' }, svg).textContent = fmt(t);
+  }
+  const days = []; for (let d = new Date(t0).setUTCHours(24, 0, 0, 0); d <= t1; d += 86400000) days.push(d);
+  const stepD = Math.ceil(days.length / Math.max(1, Math.floor((right - left) / 70)));
+  days.forEach((d, i) => { if (i % stepD === 0) svgEl('text', { x: x(d), y: H - 6, 'text-anchor': 'middle' }, svg).textContent = day(d); });
+  svgEl('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p[key]).toFixed(1)}`).join(''), fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+  const last = pts[pts.length - 1];
+  svgEl('circle', { cx: x(last.t), cy: y(last[key]), r: 3.5, fill: color }, svg);
+  const lbl = svgEl('text', { x: x(last.t) + 7, y: y(last[key]) + 4 }, svg); lbl.textContent = endLabel; lbl.style.fill = css('--fg');
+  const dot = svgEl('circle', { r: 4, fill: color, visibility: 'hidden' }, svg);
+  const hit = svgEl('rect', { x: left, y: 0, width: right - left, height: H - bottom, fill: 'transparent' }, svg);
+  const tip = tipFor(box);
+  hit.addEventListener('mousemove', (ev) => {
+    const b = svg.getBoundingClientRect(), sx = (ev.clientX - b.left) * W / b.width;
+    let best = pts[0]; for (const p of pts) if (Math.abs(x(p.t) - sx) < Math.abs(x(best.t) - sx)) best = p;
+    dot.setAttribute('cx', x(best.t)); dot.setAttribute('cy', y(best[key])); dot.setAttribute('visibility', 'visible');
+    const k = b.width / W;
+    tip.show(x(best.t) * k, y(best[key]) * k, `After trade #${best.n} · ${when(best.t)}`, [fmt(best[key])]);
+  });
+  hit.addEventListener('mouseleave', () => { dot.setAttribute('visibility', 'hidden'); tip.hide(); });
+}
+
+// ---------- start ----------
+connect();
+loadHistory();
+setInterval(loadHistory, 120000);
+setInterval(() => { if (wallet) setStatus(es && es.readyState === 1); }, 5000);
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderTrades, 150); });
+</script>
+</body>
+</html>
