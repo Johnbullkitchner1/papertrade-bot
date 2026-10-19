@@ -9,6 +9,7 @@
     "farm": "STRATEGY=farm caffeinate -dims tsx --env-file-if-exists=.env src/index.ts --mode=sim",
     "farm:live": "STRATEGY=farm caffeinate -dims tsx --env-file-if-exists=.env src/index.ts --mode=live",
     "stats": "tsx src/report.ts",
+    "stats:export": "tsx --env-file-if-exists=.env src/snapshot.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
